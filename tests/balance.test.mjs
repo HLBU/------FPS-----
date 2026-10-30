@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {parseBalance} from '../scripts/balance.mjs';
+const source=await readFile(new URL('../config/balance.csv',import.meta.url),'utf8');
+test('designer table loads the requested 20 HP per second and 2.5 speed multiplier',()=>{const c=parseBalance(source);assert.equal(c.regen,20);assert.equal(c.speedMultiplier,2.5);assert.equal(c.leanAngle,.35);});
+test('table edits update real configuration, invalid numbers do not silently become zero',()=>{assert.equal(parseBalance(source.replace('regen,外挂,自动回血速度,20,','regen,外挂,自动回血速度,30,')).regen,30);assert.throws(()=>parseBalance(source.replace('regen,外挂,自动回血速度,20,','regen,外挂,自动回血速度,, /')));assert.throws(()=>parseBalance(source.replace('0.0035,0,0.3','0.2,0,0.3')));});

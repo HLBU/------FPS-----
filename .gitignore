@@ -3,3 +3,5 @@ dist/
 .openai/*.tar.gz
 .env
 outputs/
+.cache/
+src/generated-balance.js

@@ -1,1 +1,1 @@
-{"name":"limb-lab","private":true,"type":"module","scripts":{"dev":"node server.mjs","build":"node scripts/build.mjs","test":"node --test tests/*.test.mjs"},"dependencies":{"three":"^0.180.0"},"devDependencies":{"esbuild":"^0.25.0"}}
+{"name":"limb-lab","private":true,"type":"module","scripts":{"dev":"node server.mjs","build":"node scripts/build.mjs","pretest":"node scripts/balance.mjs","test":"node --test --test-concurrency=1 tests/*.test.mjs","import-balance":"python scripts/import_balance.py"},"dependencies":{"three":"^0.180.0"},"devDependencies":{"esbuild":"^0.25.0"}}

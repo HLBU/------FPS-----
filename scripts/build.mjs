@@ -1,5 +1,9 @@
 import {build} from 'esbuild';
 import {readFile,mkdir,writeFile,copyFile} from 'node:fs/promises';
+import {generateBalance} from './balance.mjs';
+import {generateDocs} from './generate-docs.mjs';
+await generateBalance();
+await generateDocs();
 await mkdir('dist/server',{recursive:true});await mkdir('dist/.openai',{recursive:true});
 const client=await build({entryPoints:['src/main.js'],bundle:true,minify:true,format:'esm',write:false,target:'es2022',legalComments:'none'});
 const js=client.outputFiles[0].text,css=await readFile('src/style.css','utf8'),html=(await readFile('index.html','utf8')).replace('/src/main.js','/client.js').replace('/src/style.css','/style.css');
