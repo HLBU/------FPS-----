@@ -1,0 +1,8 @@
+import http from 'node:http';
+import {execFileSync} from 'node:child_process';
+execFileSync(process.execPath,['scripts/build.mjs'],{stdio:'inherit',windowsHide:true});
+const {default:worker}=await import('./dist/server/index.js');
+const env={MEMORY:new Map()};
+const server=http.createServer(async(req,res)=>{try{const origin=`http://${req.headers.host}`,chunks=[];for await(const c of req)chunks.push(c);const request=new Request(new URL(req.url,origin),{method:req.method,headers:req.headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(chunks)});const response=await worker.fetch(request,env,{waitUntil:p=>p.catch(console.error)});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));}catch(e){console.error(e);res.writeHead(500);res.end('Internal server error');}});
+const port=Number(process.env.PORT)||5189;server.listen(port,'0.0.0.0',()=>console.log(`Local: http://127.0.0.1:${port}\nLAN: use this computer's LAN IP with port ${port}`));
+process.on('SIGINT',()=>server.close(()=>process.exit()));

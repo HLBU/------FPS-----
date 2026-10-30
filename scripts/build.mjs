@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {readFile,mkdir,writeFile,copyFile} from 'node:fs/promises';
+await mkdir('dist/server',{recursive:true});await mkdir('dist/.openai',{recursive:true});
+const client=await build({entryPoints:['src/main.js'],bundle:true,minify:true,format:'esm',write:false,target:'es2022',legalComments:'none'});
+const js=client.outputFiles[0].text,css=await readFile('src/style.css','utf8'),html=(await readFile('index.html','utf8')).replace('/src/main.js','/client.js').replace('/src/style.css','/style.css');
+const entry=`import {roomRequest} from './src/signaling.js';
+const assets=${JSON.stringify({'/':{body:html,type:'text/html; charset=utf-8'},'/client.js':{body:js,type:'text/javascript; charset=utf-8'},'/style.css':{body:css,type:'text/css; charset=utf-8'}})};
+export default {async fetch(request,env,ctx){const u=new URL(request.url);if(u.pathname.startsWith('/api/rooms')){try{return await roomRequest(request,env,ctx);}catch(e){console.error('Signaling unavailable',e.message);return Response.json({error:'房间服务暂时不可用，请稍后重试。'},{status:503});}}if(u.pathname==='/health')return Response.json({ok:true});const a=assets[u.pathname];if(!a)return new Response('Not found',{status:404});return new Response(a.body,{headers:{'Content-Type':a.type,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}});}};`;
+await build({stdin:{contents:entry,resolveDir:process.cwd(),sourcefile:'worker-entry.js'},bundle:true,format:'esm',platform:'neutral',target:'es2022',outfile:'dist/server/index.js'});
+await copyFile('.openai/hosting.json','dist/.openai/hosting.json');
+console.log(`Built Worker + 3D client (${Math.round(js.length/1024)} KB JS).`);
