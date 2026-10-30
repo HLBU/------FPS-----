@@ -3,6 +3,7 @@ import {Workbook,SpreadsheetFile,FileBlob} from '@oai/artifact-tool';
 const csv=await fs.readFile('config/balance.csv','utf8'),rows=csv.trim().split(/\r?\n/).map(row=>row.split(','));
 const exists=await fs.access('config/游戏数值.xlsx').then(()=>true,()=>false);
 const wb=exists?await SpreadsheetFile.importXlsx(await FileBlob.load('config/游戏数值.xlsx')):Workbook.create(),sheet=exists?wb.worksheets.getItem('数值配置'):wb.worksheets.add('数值配置');
+if(exists&&process.argv.includes('--preview-only')){await fs.mkdir('outputs/round4',{recursive:true});const before=await wb.render({sheetName:'数值配置',range:'A14:H18',scale:1});await fs.writeFile('outputs/round4/balance-before.png',new Uint8Array(await before.arrayBuffer()));console.log((await wb.inspect({kind:'table',range:'数值配置!A14:H18',tableMaxRows:5,tableMaxCols:8})).ndjson);process.exit(0);}
 sheet.showGridLines=false;sheet.freezePanes.freezeRows(1);sheet.freezePanes.freezeColumns(3);
 const values=rows.map((row,i)=>i?row.map((v,j)=>[3,4,5].includes(j)?Number(v):v):row);
 sheet.getRange(`A1:H${rows.length}`).values=values;
@@ -15,6 +16,6 @@ const guide=exists?wb.worksheets.getItem('使用说明'):wb.worksheets.add('使�
 wb.recalculate();console.log((await wb.inspect({kind:'table',range:'数值配置!A14:H18',include:'values,formulas',tableMaxRows:5,tableMaxCols:8})).ndjson);
 const out=await SpreadsheetFile.exportXlsx(wb);await out.save('config/游戏数值.xlsx');
 await fs.mkdir('outputs/01a18cf1-8d24-7083-b118-99528984e739',{recursive:true});
-for(const [sheetName,range,file]of [['数值配置','A1:H17','balance-preview.png'],['数值配置',`A18:H${rows.length}`,'balance-preview-bottom.png'],['使用说明','A1:B9','guide-preview.png']]){try{const blob=await wb.render({sheetName,range,scale:1.5});await fs.writeFile('outputs/01a18cf1-8d24-7083-b118-99528984e739/'+file,new Uint8Array(await blob.arrayBuffer()));}catch(e){console.error('Render limit: '+e.message);}}
+for(const [sheetName,range,file]of [['数值配置','A14:H18','balance-preview.png'],['数值配置',`A40:H${rows.length}`,'balance-preview-bottom.png']]){try{const blob=await wb.render({sheetName,range,scale:1});await fs.writeFile('outputs/01a18cf1-8d24-7083-b118-99528984e739/'+file,new Uint8Array(await blob.arrayBuffer()));}catch(e){console.error('Render limit: '+e.message);}}
 try{await fs.rename('config/游戏数值.xlsx.inspect.ndjson','outputs/01a18cf1-8d24-7083-b118-99528984e739/workbook-inspect.ndjson');}catch{}
 console.log('Saved config/游戏数值.xlsx');

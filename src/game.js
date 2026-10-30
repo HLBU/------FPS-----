@@ -31,6 +31,7 @@ export const scale=p=>has(p,'small')?CFG.smallScale:1;
 function toWorld(p,point){const s=scale(p),c=Math.cos(p.yaw),n=Math.sin(p.yaw);return [p.x+(point[0]*c+point[2]*n)*s,p.y+point[1]*s,p.z+(-point[0]*n+point[2]*c)*s];}
 export const eye=p=>toWorld(p,eyeLocal(p));
 export const direction=(yaw,pitch)=>[-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)];
+export function cameraPoint(p,yaw=p.yaw,pitch=p.pitch){const e=eye(p);if(!has(p,'third'))return e;const d=direction(yaw,pitch),boom=p.aiming?1.65:2.8,side=p.aiming?.48:.65,v=[-d[0]*boom+Math.cos(yaw)*side,.45-d[1]*boom,-d[2]*boom-Math.sin(yaw)*side],len=Math.hypot(...v),n=v.map(a=>a/len),dist=Math.max(0,Math.min(len,wallDistance(e,n)-.18));return e.map((a,i)=>a+n[i]*dist);}
 export function aimAngles(a,b){const x=b[0]-a[0],y=b[1]-a[1],z=b[2]-a[2];return {yaw:Math.atan2(-x,-z),pitch:Math.atan2(y,Math.hypot(x,z))};}
 export function rayBox(o,d,min,max){let lo=0,hi=150;for(let i=0;i<3;i++){if(Math.abs(d[i])<1e-8){if(o[i]<min[i]||o[i]>max[i])return Infinity;}else{let a=(min[i]-o[i])/d[i],b=(max[i]-o[i])/d[i];if(a>b)[a,b]=[b,a];lo=Math.max(lo,a);hi=Math.min(hi,b);if(lo>hi)return Infinity;}}return lo;}
 export function wallDistance(o,d){let t=Infinity;for(const [x,y,z,w,h,l] of BLOCKS)t=Math.min(t,rayBox(o,d,[x-w/2,y,z-l/2],[x+w/2,y+h,z+l/2]));return t;}
@@ -42,9 +43,9 @@ export function hitPlayer(o,d,p){const s=scale(p),c=Math.cos(p.yaw),n=Math.sin(p
   const rotate=([x,y,z])=>{const a=x*co+y*si,b=-x*si+y*co;return[a,b*cx+z*sx,-b*sx+z*cx];};
   const t=rayBox(rotate(v),rotate(rd),part.size.map(x=>-x/2),part.size.map(x=>x/2));if(t<hit.t)hit={t,part:part.id};}return hit;}
 export function lockTarget(p,q){const o=eye(p);for(const part of [...PARTS.filter(a=>a.id==='limb'),PARTS[1],PARTS[0]]){if(part.id==='limb'&&has(q,'limbless'))continue;const target=partCenter(q,part),v=target.map((a,i)=>a-o[i]),l=Math.hypot(...v);if(wallDistance(o,v.map(a=>a/l))>l-.08)return target;}return null;}
-export const spreadFor=p=>!p.grounded?CFG.spread.air:Math.hypot(p.vx,p.vz)>1?CFG.spread.move:CFG.spread.stand;
-const emptyInput=()=>({forward:0,strafe:0,lean:0,crouch:false,prone:false,sprint:false,jump:false,fire:false,reload:false,yaw:0,pitch:0});
-function player(id){return {id,x:0,y:0,z:0,yaw:0,pitch:0,lean:0,vx:0,vy:0,vz:0,hp:CFG.hp,ammo:CFG.mag,reload:0,cool:0,cheats:[],grounded:true,input:emptyInput(),foot:0,footDistance:0,walkPhase:0,stance:0,sprinting:false,shotAnim:0,hitAnim:0,reloadDuration:0,dead:false};}
+export const spreadFor=p=>(!p.grounded?CFG.spread.air:Math.hypot(p.vx,p.vz)>1?CFG.spread.move:CFG.spread.stand)*(p.aiming?CFG.aimSpread:1);
+const emptyInput=()=>({forward:0,strafe:0,lean:0,crouch:false,prone:false,sprint:false,jump:false,fire:false,reload:false,aim:false,dashSeq:0,yaw:0,pitch:0});
+function player(id){return {id,x:0,y:0,z:0,yaw:0,pitch:0,lean:0,vx:0,vy:0,vz:0,hp:CFG.hp,ammo:CFG.mag,reload:0,cool:0,cheats:[],grounded:true,input:emptyInput(),foot:0,footDistance:0,walkPhase:0,stance:0,sprinting:false,shotAnim:0,hitAnim:0,reloadDuration:0,dead:false,aiming:false,dash:0,dashCooldown:0,lastDashSeq:0,dashX:0,dashZ:0};}
 function shuffle(arr,rng){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 const walkable=(x,z)=>Math.abs(x)<15&&Math.abs(z)<19&&!BLOCKS.some(([bx,y,bz,w,h,d,kind])=>kind!=='floor'&&y<1.8&&y+h>.1&&Math.abs(x-bx)<w/2+.34&&Math.abs(z-bz)<d/2+.34);
 // Small, deterministic navigation grid. Bots cannot see a target merely because a path exists.
@@ -57,14 +58,14 @@ export class Game{
  emit(type,data={}){this.events.push({id:++this.eid,type,...data});this.events=this.events.slice(-70);}
  newRound(){this.round++;this.prepare=0;this.botState={reaction:0,next:0,waypoint:0};this.time=CFG.roundTime;this.stage='select';this.ready=[false,false];this.winner=null;this.reason='';this.offers=shuffle(CHEATS.map(a=>a.id),this.rng).slice(0,3);this.players=[player(0),player(1)];for(let i=0;i<2;i++){this.players[i].x=i?5:-5;this.players[i].z=i?-16:16;this.players[i].yaw=i?Math.PI:0;}if(this.bot)this.choose(1,shuffle(this.offers,this.rng).slice(0,2));}
  choose(id,ids){if(this.stage!=='select'||!Array.isArray(ids)||ids.length!==2||new Set(ids).size!==2||!ids.every(a=>this.offers.includes(a)))return false;this.players[id].cheats=[...ids];this.ready[id]=true;if(this.ready.every(Boolean)){this.stage='prepare';this.prepare=CFG.prepareTime;this.emit('prepare',{round:this.round});}return true;}
- input(id,data){if(!this.players[id]||!data)return;const p=this.players[id];p.input={forward:Math.max(-1,Math.min(1,Number(data.forward)||0)),strafe:Math.max(-1,Math.min(1,Number(data.strafe)||0)),lean:Math.max(-1,Math.min(1,Number(data.lean)||0)),crouch:!!data.crouch,prone:!!data.prone,sprint:!!data.sprint,jump:!!data.jump,fire:!!data.fire,reload:!!data.reload,yaw:Number.isFinite(data.yaw)?data.yaw:0,pitch:Math.max(-1.53,Math.min(1.53,Number(data.pitch)||0))};}
+ input(id,data){if(!this.players[id]||!data)return;const p=this.players[id];p.input={forward:Math.max(-1,Math.min(1,Number(data.forward)||0)),strafe:Math.max(-1,Math.min(1,Number(data.strafe)||0)),lean:Math.max(-1,Math.min(1,Number(data.lean)||0)),crouch:!!data.crouch,prone:!!data.prone,sprint:!!data.sprint,jump:!!data.jump,fire:!!data.fire,reload:!!data.reload,aim:!!data.aim,dashSeq:Number.isSafeInteger(data.dashSeq)&&data.dashSeq>=0?data.dashSeq:0,yaw:Number.isFinite(data.yaw)?data.yaw:0,pitch:Math.max(-1.53,Math.min(1.53,Number(data.pitch)||0))};}
  snapshot(){return {players:this.players.map(({input,...p})=>({...p,cheats:this.stage==='select'?[]:p.cheats})),score:this.score,round:this.round,time:this.time,prepare:this.prepare||0,stage:this.stage,ready:this.ready,offers:this.offers,winner:this.winner,reason:this.reason,events:this.events};}
  next(){if(this.stage==='result')this.newRound();else if(this.stage==='over'){this.score=[0,0];this.round=0;this.newRound();}}
  tick(dt){dt=Math.max(0,Math.min(.05,dt));if(this.stage==='prepare'){this.prepare=Math.max(0,this.prepare-dt);if(this.prepare<1e-8){this.prepare=0;this.stage='fight';for(const p of this.players)p.input=emptyInput();this.emit('start',{round:this.round});}return;}if(this.stage!=='fight')return;this.time=Math.max(0,this.time-dt);if(this.bot)this.botTick(dt);
   for(const p of this.players){if(this.stage!=='fight')break;this.move(p,dt);p.cool=Math.max(0,p.cool-dt);p.shotAnim=Math.max(0,p.shotAnim-dt);p.hitAnim=Math.max(0,p.hitAnim-dt);if(p.reload>0){p.reload=Math.max(0,p.reload-dt);if(p.reload===0){p.ammo=CFG.mag;this.emit('loaded',{who:p.id});}}
    if(has(p,'regen'))p.hp=Math.min(CFG.hp,p.hp+CFG.regen*dt);
    if(p.input.reload&&!p.reload&&p.ammo<CFG.mag&&!has(p,'infinite')){p.reload=p.ammo===0?CFG.reloadEmpty:CFG.reloadPartial;p.reloadDuration=p.reload;this.emit('reload',{who:p.id,empty:p.ammo===0});}
-   if(p.input.fire&&!p.reload&&p.cool===0&&p.ammo>0)this.shoot(p);
+   if(p.input.fire&&!p.dashingThisTick&&!p.reload&&p.cool===0&&p.ammo>0)this.shoot(p);
   }
   if(this.stage==='fight'&&this.time===0){const [a,b]=this.players;if(Math.abs(a.hp-b.hp)<.01)this.finish(null,'生命相同 · 本回合重赛');else this.finish(a.hp>b.hp?0:1,'时间到 · 剩余生命判胜');}
  }
@@ -72,16 +73,20 @@ export class Game{
  canOccupy(p,stance){const shape=bodyShape(p,stance),c=Math.abs(Math.cos(p.yaw)),n=Math.abs(Math.sin(p.yaw)),rx=c*shape.rx+n*shape.rz,rz=n*shape.rx+c*shape.rz;
   return !BLOCKS.some(([x,y,z,w,h,l])=>y+h>p.y+.04&&y<p.y+shape.height-.02&&Math.abs(p.x-x)<w/2+rx-.01&&Math.abs(p.z-z)<l/2+rz-.01);}
  move(p,dt){const i=p.input;p.yaw=i.yaw;p.pitch=i.pitch;const wasGrounded=p.grounded,oldX=p.x,oldZ=p.z;
-  const wanted=i.prone?2:i.crouch?1:0;if(wanted!==p.stance&&this.canOccupy(p,wanted))p.stance=wanted;
-  p.sprinting=!!i.sprint&&p.stance===0&&Math.hypot(i.forward,i.strafe)>0;
+  const wanted=p.dash>0?0:i.prone?2:i.crouch?1:0;if(wanted!==p.stance&&this.canOccupy(p,wanted))p.stance=wanted;
+  p.dashCooldown=Math.max(0,p.dashCooldown-dt);
+  if(i.dashSeq!==p.lastDashSeq){p.lastDashSeq=i.dashSeq;if(i.dashSeq>0&&p.dashCooldown===0&&(p.stance===0||this.canOccupy(p,0))){p.stance=0;const len=Math.hypot(i.forward,i.strafe),f=len?i.forward/len:1,r=len?i.strafe/len:0;p.dashX=-Math.sin(p.yaw)*f+Math.cos(p.yaw)*r;p.dashZ=-Math.cos(p.yaw)*f-Math.sin(p.yaw)*r;p.dash=CFG.dashDuration;p.dashCooldown=CFG.dashCooldown;this.emit('dash',{who:p.id,from:[p.x,p.y+.6,p.z]});}}
+  const dashStep=Math.min(dt,p.dash);p.dashingThisTick=dashStep>0;p.aiming=!!i.aim&&!p.dash;
+  p.sprinting=!p.aiming&&!p.dash&&!!i.sprint&&p.stance===0&&Math.hypot(i.forward,i.strafe)>0;
   const modifier=p.stance===2?CFG.proneSpeed:p.stance===1?CFG.crouchSpeed:p.sprinting?(has(p,'speed')?CFG.speedMultiplier:CFG.sprintMultiplier):1;
-  const speed=CFG.speed*modifier,len=Math.max(1,Math.hypot(i.forward,i.strafe));
+  const speed=CFG.speed*modifier*(p.aiming?CFG.aimSpeed:1),len=Math.max(1,Math.hypot(i.forward,i.strafe));
   const targetX=(-Math.sin(p.yaw)*i.forward+Math.cos(p.yaw)*i.strafe)/len*speed,targetZ=(-Math.cos(p.yaw)*i.forward-Math.sin(p.yaw)*i.strafe)/len*speed;
-  const rate=!p.grounded?CFG.airAcceleration:Math.hypot(i.forward,i.strafe)>0?CFG.acceleration:CFG.deceleration,dv=Math.hypot(targetX-p.vx,targetZ-p.vz),blend=dv>0?Math.min(1,rate*dt/dv):1;
-  p.vx+=(targetX-p.vx)*blend;p.vz+=(targetZ-p.vz)*blend;
-  if(i.jump&&p.grounded&&p.stance===0){p.vy=CFG.jumpVelocity;p.grounded=false;}p.vy=Math.max(-CFG.maxFallSpeed,p.vy-CFG.gravity*dt);
+  const rate=!p.grounded?CFG.airAcceleration*(p.aiming?CFG.aimAir:1):Math.hypot(i.forward,i.strafe)>0?CFG.acceleration:CFG.deceleration,dv=Math.hypot(targetX-p.vx,targetZ-p.vz),blend=dv>0?Math.min(1,rate*dt/dv):1;
+  if(p.dash){p.vx=p.dashX*CFG.dashDistance/CFG.dashDuration;p.vz=p.dashZ*CFG.dashDistance/CFG.dashDuration;}else{p.vx+=(targetX-p.vx)*blend;p.vz+=(targetZ-p.vz)*blend;}
+  if(i.jump&&!p.dash&&p.grounded&&p.stance===0){p.vy=CFG.jumpVelocity*(p.aiming?CFG.aimJump:1);p.grounded=false;}p.vy=Math.max(-CFG.maxFallSpeed,p.vy-CFG.gravity*dt);
   const shape=bodyShape(p),s=scale(p),c=Math.abs(Math.cos(p.yaw)),n=Math.abs(Math.sin(p.yaw)),rx=c*shape.rx+n*shape.rz,rz=n*shape.rx+c*shape.rz,height=shape.height;
-  for(const axis of ['x','z']){p[axis]+=p[axis==='x'?'vx':'vz']*dt;for(const [x,y,z,w,h,l]of BLOCKS){if(y+h<=p.y+.045||y>=p.y+height-.02)continue;if(p.x+rx>x-w/2&&p.x-rx<x+w/2&&p.z+rz>z-l/2&&p.z-rz<z+l/2){const center=axis==='x'?x:z,half=(axis==='x'?w:l)/2,radius=axis==='x'?rx:rz;p[axis]=p[axis]<center?center-half-radius:center+half+radius;}}}
+  let dashBlocked=false;const horizontalDt=p.dash?dashStep:dt;for(let sub=0,steps=Math.max(1,Math.ceil(Math.hypot(p.vx,p.vz)*horizontalDt/.15));sub<steps;sub++)for(const axis of ['x','z']){p[axis]+=p[axis==='x'?'vx':'vz']*horizontalDt/steps;for(const [x,y,z,w,h,l]of BLOCKS){if(y+h<=p.y+.045||y>=p.y+height-.02)continue;if(p.x+rx>x-w/2&&p.x-rx<x+w/2&&p.z+rz>z-l/2&&p.z-rz<z+l/2){dashBlocked=true;const center=axis==='x'?x:z,half=(axis==='x'?w:l)/2,radius=axis==='x'?rx:rz;p[axis]=p[axis]<center?center-half-radius:center+half+radius;}}}
+  if(p.dash){p.dash=Math.max(0,p.dash-dt);if(p.dash<1e-8)p.dash=0;if(dashBlocked)p.dash=0;if(!p.dash){p.vx=0;p.vz=0;}}
   const prev=p.y;p.y+=p.vy*dt;p.grounded=false;for(const [x,y,z,w,h,l]of BLOCKS){if(p.x+rx<=x-w/2||p.x-rx>=x+w/2||p.z+rz<=z-l/2||p.z-rz>=z+l/2)continue;
    if(p.vy<=0&&prev>=y+h-.06&&p.y<=y+h){p.y=y+h;p.vy=0;p.grounded=true;}
    else if(p.vy>0&&prev+height<=y+.04&&p.y+height>=y){p.y=y-height;p.vy=0;}}
@@ -92,14 +97,17 @@ export class Game{
   if(p.grounded&&traveled>.001){p.footDistance+=traveled;if(p.footDistance>=(p.sprinting?1.8:p.stance===1?1.1:1.35)){p.footDistance=0;if(!has(p,'silent'))this.emit('step',{who:p.id,x:p.x,z:p.z,stance:p.stance,sprint:p.sprinting});}}
   if(!wasGrounded&&p.grounded&&!has(p,'silent'))this.emit('land',{who:p.id,x:p.x,z:p.z});
  }
- shoot(p){const q=this.players[1-p.id],o=eye(p);let yaw=p.yaw,pitch=p.pitch;if(has(p,'aim')&&pitch>-1.1){const t=lockTarget(p,q);if(t){const a=aimAngles(o,t);yaw=a.yaw;pitch=a.pitch;p.yaw=yaw;p.pitch=pitch;p.input.yaw=yaw;p.input.pitch=pitch;}}
+ shoot(p){const q=this.players[1-p.id],o=eye(p);let yaw=p.yaw,pitch=p.pitch;if(has(p,'aim')&&pitch>-1.1){const t=lockTarget(p,q);if(t){const a=aimAngles(o,t);yaw=a.yaw;pitch=a.pitch;}}
+  // Converge third-person crosshair toward a point, but always test obstruction from the body.
+  if(has(p,'third')&&!(has(p,'aim')&&lockTarget(p,q)&&pitch>-1.1)){const cam=cameraPoint(p),view=direction(yaw,pitch),t=Math.min(CFG.range,wallDistance(cam,view)),a=aimAngles(o,cam.map((v,i)=>v+view[i]*t));yaw=a.yaw;pitch=a.pitch;}
   const raw=direction(yaw,pitch),spread=spreadFor(p),d=direction(yaw+(this.rng()-.5)*spread*2,pitch+(this.rng()-.5)*spread*2);p.cool=CFG.fire;p.shotAnim=.12;if(!has(p,'infinite'))p.ammo--;
   // Persistent downward firing produces upward recoil. Clamp keeps the arena bounded.
-  p.vy=Math.min(CFG.maxLiftSpeed,p.vy+Math.max(0,-raw[1]) * CFG.recoilLift);if(raw[1]<-.25)p.grounded=false;
+  if(raw[1]<-.25){p.vy=Math.min(CFG.maxLiftSpeed,Math.max(CFG.launchSpeed,p.vy+Math.max(0,-raw[1])*CFG.recoilLift));p.grounded=false;this.emit('lift',{who:p.id,from:o.map((a,i)=>a+raw[i]*Math.min(3,wallDistance(o,raw)))});}
   const wall=wallDistance(o,d),hit=hitPlayer(o,d,q);let distance=Math.min(CFG.range,wall);let damage=0;
   if(hit.t<CFG.range&&(has(p,'wall')||hit.t<=wall+.015)){distance=hit.t;damage=CFG.damage[hit.part];q.hp=Math.max(0,q.hp-damage);q.hitAnim=.22;}
   else if(has(p,'wall'))distance=CFG.range;
-  this.emit('shot',{who:p.id,from:o,to:o.map((a,i)=>a+d[i]*distance),part:damage?hit.part:null,damage,through:damage>0&&hit.t>wall});
+  p.shotTarget=o.map((a,i)=>a+d[i]*distance);
+  this.emit('shot',{who:p.id,from:o,to:p.shotTarget,part:damage?hit.part:null,damage,through:damage>0&&hit.t>wall});
   if(q.hp<=0)this.finish(p.id,`击败对手 · ${hit.part==='limb'?'四肢要害':hit.part==='head'?'头部命中':'躯干命中'}`);
  }
  botTick(dt){const p=this.players[1],q=this.players[0],bs=this.botState;const visibleTarget=lockTarget(p,q),target=visibleTarget||partCenter(q,has(q,'limbless')?PARTS[1]:PARTS[4]),o=eye(p),v=target.map((a,i)=>a-o[i]),dist=Math.hypot(...v),visible=!!visibleTarget;

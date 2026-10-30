@@ -1,0 +1,9 @@
+export const BINDINGS_KEY='limblab-bindings-v1';
+export const ACTIONS={forward:'前进',back:'后退',left:'左移',right:'右移',jump:'跳跃 / 趴下起身',crouch:'下蹲',prone:'切换趴下',sprint:'疾跑',leanLeft:'左探头',leanRight:'右探头',reload:'手动换弹',dash:'短距离冲刺',fire:'射击',aim:'肩射'};
+export const DEFAULT_BINDINGS={forward:'KeyW',back:'KeyS',left:'KeyA',right:'KeyD',jump:'Space',crouch:'ControlLeft',prone:'KeyZ',sprint:'ShiftLeft',leanLeft:'KeyQ',leanRight:'KeyE',reload:'KeyR',dash:'KeyV',fire:'Mouse0',aim:'Mouse2'};
+export function validCode(code){return typeof code==='string'&&/^(Key[A-Z]|Digit[0-9]|F[1-9]|F1[0-2]|Space|Tab|CapsLock|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Arrow(Up|Down|Left|Right)|Mouse[0-4])$/.test(code);}
+export function loadBindings(storage){try{const data=JSON.parse(storage.getItem(BINDINGS_KEY)),values=Object.keys(ACTIONS).map(k=>data[k]);if(values.every(validCode)&&new Set(values).size===values.length)return Object.fromEntries(Object.keys(ACTIONS).map(k=>[k,data[k]]));}catch{}return {...DEFAULT_BINDINGS};}
+export function bindAction(bindings,action,code){if(!ACTIONS[action]||!validCode(code))return{error:'该按键不可绑定，ESC 用于取消。'};const conflict=Object.keys(ACTIONS).find(k=>k!==action&&bindings[k]===code);if(conflict)return{error:`已用于“${ACTIONS[conflict]}”，请先更改该项。`};return{bindings:{...bindings,[action]:code}};}
+export function saveBindings(storage,bindings){try{storage.setItem(BINDINGS_KEY,JSON.stringify(bindings));return true;}catch{return false;}}
+export function keyName(code){return({Space:'空格',ControlLeft:'左 Ctrl',ControlRight:'右 Ctrl',ShiftLeft:'左 Shift',ShiftRight:'右 Shift',AltLeft:'左 Alt',AltRight:'右 Alt',Mouse0:'鼠标左键',Mouse1:'鼠标中键',Mouse2:'鼠标右键',Mouse3:'鼠标侧键1',Mouse4:'鼠标侧键2'})[code]||code.replace(/^Key|^Digit/,'');}
+export function isPressed(keys,code){return keys.has(code);}
