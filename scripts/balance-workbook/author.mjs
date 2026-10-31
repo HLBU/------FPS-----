@@ -16,6 +16,6 @@ const guide=exists?wb.worksheets.getItem('使用说明'):wb.worksheets.add('使�
 wb.recalculate();console.log((await wb.inspect({kind:'table',range:'数值配置!A14:H18',include:'values,formulas',tableMaxRows:5,tableMaxCols:8})).ndjson);
 const out=await SpreadsheetFile.exportXlsx(wb);await out.save('config/游戏数值.xlsx');
 await fs.mkdir('outputs/01a18cf1-8d24-7083-b118-99528984e739',{recursive:true});
-for(const [sheetName,range,file]of [['数值配置','A14:H18','balance-preview.png'],['数值配置',`A40:H${rows.length}`,'balance-preview-bottom.png']]){try{const blob=await wb.render({sheetName,range,scale:1});await fs.writeFile('outputs/01a18cf1-8d24-7083-b118-99528984e739/'+file,new Uint8Array(await blob.arrayBuffer()));}catch(e){console.error('Render limit: '+e.message);}}
+for(const [sheetName,range,file]of [['数值配置','A6:H18','balance-preview.png'],['数值配置','A24:H32','lean-preview.png'],['数值配置',`A40:H${rows.length}`,'balance-preview-bottom.png']]){try{const blob=await wb.render({sheetName,range,scale:1});await fs.writeFile('outputs/01a18cf1-8d24-7083-b118-99528984e739/'+file,new Uint8Array(await blob.arrayBuffer()));}catch(e){console.error('Render limit: '+e.message);}}
 try{await fs.rename('config/游戏数值.xlsx.inspect.ndjson','outputs/01a18cf1-8d24-7083-b118-99528984e739/workbook-inspect.ndjson');}catch{}
 console.log('Saved config/游戏数值.xlsx');
